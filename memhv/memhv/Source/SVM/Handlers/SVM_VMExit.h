@@ -8,6 +8,9 @@ namespace SVM
 
     void HandleGenericSVM(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext);
     void HandleVMCall(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext);
+    void HandleBreakpoint(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext);
+    void HandleDebugException(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext);
+    void HandlePageFault(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext);
     void HandleMSRAccess(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext);
 
     EXTERN_C bool HandleExit(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_REGISTERS guestRegisters);

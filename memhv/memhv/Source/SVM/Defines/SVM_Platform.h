@@ -46,6 +46,9 @@
 #define SVM_INTERCEPT_MISC2_VMLOAD                                  (1UL << 2)
 #define SVM_INTERCEPT_MISC2_VMSAVE                                  (1UL << 3)
 #define SVM_NP_ENABLE_NP_ENABLE                                     (1UL << 0)
+#define SVM_EXCEPTION_VECTOR_PAGE_FAULT                             (1UL << 14)
+#define SVM_EXCEPTION_VECTOR_BP                                     (1UL << 3)
+#define SVM_EXCEPTION_VECTOR_DB                                     (1UL << 1);
 
 #define SVM_INTERCEPT_CR_WRITES_CR3                                 (1UL << 3)
 

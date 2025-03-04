@@ -74,8 +74,17 @@ EXTERN_C bool SVM::HandleExit(PVIRTUAL_PROCESSOR_DATA vpData, const PGUEST_REGIS
     case VMEXIT_VMMCALL:
         HandleVMCall(vpData, &guestContext);
         break;
+    case VMEXIT_EXCEPTION_PF:
+        HandlePageFault(vpData, &guestContext);
+        break;
+    case VMEXIT_EXCEPTION_BP:
+        HandleBreakpoint(vpData, &guestContext);
+        break;
+    case VMEXIT_EXCEPTION_DB:
+        HandleDebugException(vpData, &guestContext);
+        break;
     default:
-        KeBugCheckEx(INVALID_DRIVER_HANDLE, IsInUserland(vpData), vpData->GuestVmcb.StateSaveArea.Rip, vpData->GuestVmcb.ControlArea.ExitCode, vpData->GuestVmcb.ControlArea.ExitInfo1);
+        KeBugCheckEx(BITLOCKER_FATAL_ERROR, IsInUserland(vpData), vpData->GuestVmcb.StateSaveArea.Rip, vpData->GuestVmcb.ControlArea.ExitCode, vpData->GuestVmcb.ControlArea.ExitInfo1);
     }
 
     if (guestContext.ExitVm)

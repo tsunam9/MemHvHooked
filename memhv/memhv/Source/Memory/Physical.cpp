@@ -8,6 +8,20 @@ ULONG64 Memory::GetDirectoryBase(const PEPROCESS process)
     return *reinterpret_cast<ULONG64*>(reinterpret_cast<PBYTE>(process) + 0x28);
 }
 
+ULONG64 Memory::GetProcessBaseAddress(PEPROCESS process, ULONG64 target_cr3)
+{
+
+    const ULONG64 original = __readcr3();
+    __writecr3(target_cr3);
+
+    ULONG64 peb = *(ULONG64*)((ULONG64)process + 0x550);
+    ULONG64 result = *(ULONG64*)(peb + 0x10);  // Direct memory access to peb + 0x10
+
+    __writecr3(original);
+
+    return result;
+}
+
 ULONG64 Memory::VirtualToPhysical(const ULONG64 virtualAddress)
 {
     return MmGetPhysicalAddress(reinterpret_cast<PVOID>(virtualAddress)).QuadPart;
@@ -34,13 +48,16 @@ ULONG64 Memory::ResolveProcessPhysicalAddress(const UINT32 pageIndex, const ULON
     return result;
 }
 
-Memory::PTE* Memory::GetPte(const ULONG64 address)
+Memory::PTE* Memory::GetPte(const ULONG64 address, ULONG64 customCr3, bool* out_was1Gbpage)
 {
+
+    UNREFERENCED_PARAMETER(out_was1Gbpage);
+
     VIRTUAL_ADDRESS virtualAddress;
     virtualAddress.Value = address;
 
     PTE_CR3 cr3;
-    cr3.Value = __readcr3();
+    cr3.Value = customCr3 ? customCr3 : __readcr3();
 
     PML4E* pml4 = reinterpret_cast<PML4E*>(PhysicalToVirtual(PFN_TO_PAGE(cr3.Pml4)));
     const PML4E* pml4e = (pml4 + virtualAddress.Pml4Index);
@@ -48,13 +65,18 @@ Memory::PTE* Memory::GetPte(const ULONG64 address)
         return nullptr;
 
     PDPTE* pdpt = reinterpret_cast<PDPTE*>(PhysicalToVirtual(PFN_TO_PAGE(pml4e->Pdpt)));
-    const PDPTE* pdpte = pdpte = (pdpt + virtualAddress.PdptIndex);
+    PDPTE* pdpte = pdpte = (pdpt + virtualAddress.PdptIndex);
     if (!pdpte->Present)
         return nullptr;
 
     // sanity check 1GB page
-    if (pdpte->PageSize)
+    if (pdpte->PageSize) {
+       /* if (out_was1Gbpage) {
+            *out_was1Gbpage = true;
+        }
+        return reinterpret_cast<Memory::PTE*>(pdpte);*/
         return nullptr;
+    }
 
     PDE* pd = reinterpret_cast<PDE*>(PhysicalToVirtual(PFN_TO_PAGE(pdpte->Pd)));
     const PDE* pde = pde = (pd + virtualAddress.PdIndex);

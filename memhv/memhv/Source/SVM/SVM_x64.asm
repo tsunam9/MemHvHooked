@@ -45,6 +45,20 @@ POPAQ macro
         pop     rax
         endm
 
+ReadPKRU proc 
+    xor ecx,ecx
+    RDPKRU
+    ret
+ReadPKRU endp
+
+WritePKRU proc
+    mov eax,ecx
+    xor ecx,ecx
+    xor edx,edx
+    WRPKRU
+    ret
+WritePKRU endp
+
 LaunchVM proc frame
         mov rsp, rcx
 

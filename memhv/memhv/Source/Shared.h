@@ -15,6 +15,8 @@ namespace Shared
         GetDirectoryBase,
         CopyProcessMemory,
         ProtectSelf,
+        GetProcessBaseAddress,
+        CreateHook,
     };
 
     enum ErrorCodes
@@ -24,6 +26,7 @@ namespace Shared
         MemoryCopyTooLarge,
         MemoryCopyFailSource,
         MemoryCopyFailTarget,
+        HookFailedToFetchPTE,
     };
 
     typedef struct _COPY_MEMORY_DATA
@@ -34,4 +37,13 @@ namespace Shared
         ULONG64 DestinationAddress;
         SIZE_T NumberOfBytes;
     } COPY_MEMORY_DATA;
+
+    typedef struct _HOOK_DATA
+    {
+        ULONG64 TargetFunctionDirectoryBase;
+        ULONG64 FunctionToHook;
+        ULONG64 HandlerFunctionDirectoryBase;
+        ULONG64 HandlerFunction;
+    } HOOK_DATA;
+
 }

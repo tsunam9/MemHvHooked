@@ -21,8 +21,26 @@
 #include "SVM/SVM.h"
 #include "SVM/Handlers/SVM_VMExit.h"
 
+struct Hook {
+    ULONG64 hookedFunction;
+    ULONG64 hookedFunctionDirectoryBase;
+    ULONG64 handlerFunction;
+    ULONG64 handlerDirectoryBase;
+    ULONG64 OldPagePhysical;
+    ULONG64 NewPagePhysical;
+    ULONG64 pagePTR;
+    UINT8 oldkey;
+};
+
+
 namespace Global
 {
+
+    inline Hook G_Hooks[32];
+    inline int hooksplaced;
+    inline bool singlestepping;
+    inline ULONG64 singlestepaddress;
+
     inline PVOID BlankPage = nullptr;
     inline PVOID PreallocatedPools[32];
 

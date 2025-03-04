@@ -115,8 +115,9 @@ namespace Memory
             ULONG64 Global : 1;
             ULONG64 Ignored1 : 3;
             ULONG64 PageFrame : 40;
-            ULONG64 Ignored3 : 11;
-            ULONG64 Xd : 1;
+            ULONG64 Ignored3 : 7;  // Bits 52–58
+            ULONG64 ProtectionKey : 4;  // Bits 59–62
+            ULONG64 Xd : 1;  // Bit 63 (Execute Disable)
         };
     } PTE;
 
@@ -276,10 +277,11 @@ namespace Memory
     } PAGE_INFO;
 
     ULONG64 GetDirectoryBase(PEPROCESS process);
+    ULONG64 GetProcessBaseAddress(PEPROCESS process, ULONG64 target_cr3);
     ULONG64 VirtualToPhysical(ULONG64 virtualAddress);
     ULONG64 PhysicalToVirtual(ULONG64 physicalAddress);
     ULONG64 ResolveProcessPhysicalAddress(UINT32 pageIndex, ULONG64 directoryBase, ULONG64 virtualAddress);
-    PTE* GetPte(ULONG64 address);
+    PTE* GetPte(const ULONG64 address, ULONG64 customCr3 = 0, bool* out_was1GbPage = nullptr);
     bool PreparePage(PAGE_INFO* targetPage);
     bool PreparePages();
     PVOID OverwritePage(UINT32 pageIndex, ULONG64 physicalAddress);

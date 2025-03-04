@@ -4,6 +4,8 @@ namespace SVM
 {
     EXTERN_C void _sgdt(PVOID descriptor);
     EXTERN_C void NTAPI LaunchVM(PVOID hostRsp);
+    EXTERN_C UINT32 NTAPI ReadPKRU();
+    EXTERN_C void NTAPI WritePKRU(ULONG32 value);
 
     NTSTATUS CheckSupport();
     void BuildNestedPageTables(PSHARED_VIRTUAL_PROCESSOR_DATA sharedData);
