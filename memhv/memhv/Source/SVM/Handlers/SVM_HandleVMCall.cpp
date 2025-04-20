@@ -142,7 +142,7 @@ void HandleCreateHook(const SVM::PVIRTUAL_PROCESSOR_DATA vpData, const SVM::PGUE
 
 	Memory::ReadPhysicalAddress(processorIndex, targetAddress, newPage, 4096); // read 4kb from old page into new page
 
-	ULONG64 offsetInPage = PFN_TO_PAGE(pte.PageFrame) & 0xFFF;
+	ULONG64 offsetInPage = copyData.FunctionToHook & 0xFFF;
 
 	// Create a trampoline by injecting a breakpoint at the function's entry point in our copied page
 	BYTE* newPageBytes = (BYTE*)newPage;
@@ -162,7 +162,7 @@ void HandleCreateHook(const SVM::PVIRTUAL_PROCESSOR_DATA vpData, const SVM::PGUE
 	temphook.handlerDirectoryBase = copyData.HandlerFunctionDirectoryBase;
 	temphook.hookedFunction = copyData.FunctionToHook;
 	temphook.hookedFunctionDirectoryBase = copyData.TargetFunctionDirectoryBase;
-	temphook.pagePTR = PhysicalPTE;
+	temphook.pte = virtual_pte;
 	temphook.NewPagePhysical = newPagePhysical;
 	temphook.OldPagePhysical = PFN_TO_PAGE(pte.PageFrame);
 	temphook.oldkey = 0;
@@ -183,29 +183,36 @@ void HandleCreateHook(const SVM::PVIRTUAL_PROCESSOR_DATA vpData, const SVM::PGUE
 void SVM::HandleDebugException(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext) {
 	UNREFERENCED_PARAMETER(guestContext);
 
-	if (vpData->GuestVmcb.StateSaveArea.Dr6 & (1 << 14)) {
-		for (size_t i = 0; i < Global::hooksplaced; i++)
-		{
-			const UINT32 processorindex = static_cast<UINT32>(vpData->HostStackLayout.ProcessorIndex);
-			Memory::PTE pte{};
-			Memory::ReadPhysicalAddress(processorindex, Global::G_Hooks[i].pagePTR, &pte, sizeof(pte));
-			pte.PageFrame = PAGE_TO_PFN(Global::G_Hooks[i].NewPagePhysical);
-			pte.ProtectionKey = 15;
-			Memory::WritePhysicalAddress(processorindex, Global::G_Hooks[i].pagePTR, &pte, sizeof(pte));
-			__invlpg((void*)Global::G_Hooks[0].pagePTR);
+
+	if (vpData->GuestVmcb.StateSaveArea.Dr6 & (1 << 14)) { // Caused by tf being set in vmcb
+
+		int i = Global::CurrentHookIndex;
+
+		if (vpData->GuestVmcb.StateSaveArea.Rip <= Global::G_Hooks[i].stepdata.singlestepaddress + 15) {
+			ULONG64 originalCr3 = __readcr3();
+			__writecr3(Global::G_Hooks[i].hookedFunctionDirectoryBase);
+			auto pte = Global::G_Hooks[i].pte;
+			if (!pte)
+				return;
+			pte->PageFrame = PAGE_TO_PFN(Global::G_Hooks[i].NewPagePhysical);
+			pte->ProtectionKey = 15;
+			__invlpg(Global::G_Hooks[i].pte);
+			__writecr3(originalCr3);
+			RtlZeroMemory(&Global::G_Hooks[i].stepdata, sizeof(SingleStepData));
+			vpData->GuestVmcb.StateSaveArea.Rflags &= ~(1 << 8);
+			vpData->GuestVmcb.StateSaveArea.Dr6 &= ~(1 << 14);
+			return;
 		}
-		Global::singlestepping = false;
-		vpData->GuestVmcb.StateSaveArea.Dr6 = 0xFFFF0FF0; // set reserved bits and leave everything else blank;
-		return;
+
 	}
-	
+
 	EVENTINJ event;
 	event.AsUInt64 = 0;
 	event.Fields.Vector = 1;    // Vector 1 for #DB (was 3 for #BP)
 	event.Fields.Type = 3;      // Type 3 = Hardware exception
 	event.Fields.Valid = 1;     // Mark the event as valid
 	vpData->GuestVmcb.ControlArea.EventInj = event.AsUInt64;
-	
+
 }
 
 
@@ -235,44 +242,45 @@ void SVM::HandleBreakpoint(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestC
 	vpData->GuestVmcb.StateSaveArea.Rip = vpData->GuestVmcb.ControlArea.NRip;
 
 }
-
 void SVM::HandlePageFault(PVIRTUAL_PROCESSOR_DATA vpData, PGUEST_CONTEXT guestContext) {
 
 	UNREFERENCED_PARAMETER(guestContext);
-
+	/*
 	if (vpData->GuestVmcb.ControlArea.ExitInfo1 & (1 << 5)) {
-		if (Global::hooksplaced == 1) {
-			const UINT32 processorindex = static_cast<UINT32>(vpData->HostStackLayout.ProcessorIndex);
-			Memory::PTE pte{};
-			Memory::ReadPhysicalAddress(processorindex, Global::G_Hooks[0].pagePTR, &pte, sizeof(pte));
-			pte.PageFrame = PAGE_TO_PFN(Global::G_Hooks[0].OldPagePhysical);
-			pte.ProtectionKey = Global::G_Hooks[0].oldkey;
-			Memory::WritePhysicalAddress(processorindex, Global::G_Hooks[0].pagePTR, &pte, sizeof(pte));
-			Global::singlestepping = true;
-			vpData->GuestVmcb.StateSaveArea.Rflags |= (1 << 8);
-			__invlpg((void*)Global::G_Hooks[0].pagePTR);
+		ULONG64 FaultingAddress = vpData->GuestVmcb.ControlArea.ExitInfo2;
+		for (int i = 0; i < Global::hooksplaced; i++) {
+			auto originalCr3 = __readcr3();
+			__writecr3(Global::G_Hooks[i].hookedFunctionDirectoryBase);
+			Memory::PTE* pte = Memory::GetPte(FaultingAddress);
+			if (!(pte == Global::G_Hooks[i].pte))
+				continue;
+			Global::CurrentHookIndex = i;
+			pte->PageFrame = PAGE_TO_PFN(Global::G_Hooks[i].OldPagePhysical);
+			pte->ProtectionKey = Global::G_Hooks[i].oldkey;
+			__invlpg(Global::G_Hooks[i].pte);
+			__writecr3(originalCr3);
+			Global::G_Hooks[i].stepdata.singlestepaddress = vpData->GuestVmcb.StateSaveArea.Rip;
+			vpData->GuestVmcb.StateSaveArea.Rflags |= (1 << 8); // set tf bit
 			return;
 		}
-	}
 
+	}
+	*/
 	// Create an EventInj structure to inject the page fault into the guest
 	EVENTINJ event;
 	event.AsUInt64 = 0;
 	event.Fields.Vector = EXCEPTION_VECTOR_PAGE_FAULT;    // Page fault vector
 	event.Fields.Type = INTERRUPT_TYPE_HARDWARE_EXCEPTION; // It's a hardware exception
-
 	// Check if the error code is valid (ExitInfo1 contains error code)
 	event.Fields.ErrorCodeValid = 1;   // We have a valid error code (ExitInfo1)
 	event.Fields.Valid = 1;             // The event is valid
-
 	// Set the error code from ExitInfo1
 	event.Fields.ErrorCode = vpData->GuestVmcb.ControlArea.ExitInfo1;  // Page fault error code
-
 	// Inject the page fault event into the guest
 	vpData->GuestVmcb.ControlArea.EventInj = event.AsUInt64;
-
 	// Set the CR2 register (the faulting linear address)
 	vpData->GuestVmcb.StateSaveArea.Cr2 = vpData->GuestVmcb.ControlArea.ExitInfo2;  // Faulting linear address
+	return;
 }
 
 void SVM::HandleVMCall(const PVIRTUAL_PROCESSOR_DATA vpData, const PGUEST_CONTEXT guestContext)

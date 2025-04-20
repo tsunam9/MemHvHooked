@@ -1,6 +1,6 @@
 #pragma once
 
-#define NESTED_MODE true
+#define NESTED_MODE false
 
 #include <ntifs.h>
 #include <intrin.h>
@@ -21,6 +21,13 @@
 #include "SVM/SVM.h"
 #include "SVM/Handlers/SVM_VMExit.h"
 
+struct SingleStepData {
+    bool singlestepping;
+    ULONG64 singlestepaddress;
+    int hookindex;
+};
+
+
 struct Hook {
     ULONG64 hookedFunction;
     ULONG64 hookedFunctionDirectoryBase;
@@ -28,8 +35,9 @@ struct Hook {
     ULONG64 handlerDirectoryBase;
     ULONG64 OldPagePhysical;
     ULONG64 NewPagePhysical;
-    ULONG64 pagePTR;
+    Memory::PTE* pte;
     UINT8 oldkey;
+    SingleStepData stepdata{};
 };
 
 
@@ -38,8 +46,7 @@ namespace Global
 
     inline Hook G_Hooks[32];
     inline int hooksplaced;
-    inline bool singlestepping;
-    inline ULONG64 singlestepaddress;
+    inline int CurrentHookIndex;
 
     inline PVOID BlankPage = nullptr;
     inline PVOID PreallocatedPools[32];

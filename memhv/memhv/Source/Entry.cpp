@@ -33,6 +33,7 @@ NTSTATUS PreallocatePools()
 
 EXTERN_C NTSTATUS Entry()
 {
+
     if (!Memory::PreparePages())
         return STATUS_INSUFFICIENT_RESOURCES;
 

@@ -208,6 +208,9 @@ void SVM::PrepareForVirtualization(const PVIRTUAL_PROCESSOR_DATA vpData, const P
 	const PHYSICAL_ADDRESS pml4BasePa = MmGetPhysicalAddress(sharedVpData->Pml4Entries);
 	const PHYSICAL_ADDRESS msrpmPa = MmGetPhysicalAddress(sharedVpData->MsrPermissionsMap);
 
+	vpData->GuestVmcb.ControlArea.InterceptCrRead |= (1 << 4);
+	vpData->GuestVmcb.ControlArea.InterceptCrWrite |= (1 << 4);
+
 	vpData->GuestVmcb.ControlArea.InterceptException = SVM_EXCEPTION_VECTOR_PAGE_FAULT | SVM_EXCEPTION_VECTOR_BP | SVM_EXCEPTION_VECTOR_DB;
 
 	vpData->GuestVmcb.ControlArea.InterceptMisc2 |= SVM_INTERCEPT_MISC2_VMRUN;

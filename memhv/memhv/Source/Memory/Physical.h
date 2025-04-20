@@ -282,6 +282,7 @@ namespace Memory
     ULONG64 PhysicalToVirtual(ULONG64 physicalAddress);
     ULONG64 ResolveProcessPhysicalAddress(UINT32 pageIndex, ULONG64 directoryBase, ULONG64 virtualAddress);
     PTE* GetPte(const ULONG64 address, ULONG64 customCr3 = 0, bool* out_was1GbPage = nullptr);
+    PTE* GetPhysicalPte(const ULONG64 address, ULONG64 customCr3, bool* out_was1Gbpage);
     bool PreparePage(PAGE_INFO* targetPage);
     bool PreparePages();
     PVOID OverwritePage(UINT32 pageIndex, ULONG64 physicalAddress);

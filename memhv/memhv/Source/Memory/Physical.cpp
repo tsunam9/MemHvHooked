@@ -48,6 +48,49 @@ ULONG64 Memory::ResolveProcessPhysicalAddress(const UINT32 pageIndex, const ULON
     return result;
 }
 
+Memory::PTE* Memory::GetPhysicalPte(const ULONG64 address, ULONG64 customCr3, bool* out_was1Gbpage)
+{
+    VIRTUAL_ADDRESS virtualAddress;
+    virtualAddress.Value = address;
+
+    PTE_CR3 cr3;
+    cr3.Value = customCr3 ? customCr3 : __readcr3();
+
+    // Convert PML4 PFN to physical address (1:1 mapped)
+    PML4E* pml4 = reinterpret_cast<PML4E*>(PFN_TO_PAGE(cr3.Pml4));
+    PML4E* pml4e = &pml4[virtualAddress.Pml4Index];
+    if (!pml4e->Present)
+        return nullptr;
+
+    // Convert PDPT PFN to physical address (1:1 mapped)
+    PDPTE* pdpt = reinterpret_cast<PDPTE*>(PFN_TO_PAGE(pml4e->Pdpt));
+    PDPTE* pdpte = &pdpt[virtualAddress.PdptIndex];
+    if (!pdpte->Present)
+        return nullptr;
+
+    if (pdpte->PageSize) {
+        if (out_was1Gbpage) *out_was1Gbpage = true;
+        return nullptr; // Handle 1GB pages if required
+    }
+
+    // Convert PD PFN to physical address (1:1 mapped)
+    PDE* pd = reinterpret_cast<PDE*>(PFN_TO_PAGE(pdpte->Pd));
+    PDE* pde = &pd[virtualAddress.PdIndex];
+    if (!pde->Present)
+        return nullptr;
+
+    if (pde->PageSize)
+        return nullptr; // 2MB page
+
+    // Convert PT PFN to physical address (1:1 mapped)
+    PTE* pt = reinterpret_cast<PTE*>(PFN_TO_PAGE(pde->Pt));
+    PTE* pte = &pt[virtualAddress.PtIndex];
+    if (!pte->Present)
+        return nullptr;
+
+    return pte;
+}
+
 Memory::PTE* Memory::GetPte(const ULONG64 address, ULONG64 customCr3, bool* out_was1Gbpage)
 {
 
@@ -94,6 +137,8 @@ Memory::PTE* Memory::GetPte(const ULONG64 address, ULONG64 customCr3, bool* out_
 
     return pte;
 }
+
+
 
 bool Memory::PreparePage(PAGE_INFO* targetPage)
 {
